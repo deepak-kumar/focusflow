@@ -1,0 +1,394 @@
+import Foundation
+import FirebaseFirestore
+import Combine
+
+class TimerService: ObservableObject {
+    @Published var currentSession: TimerSession?
+    @Published var timeRemaining: TimeInterval = 0
+    @Published var isRunning = false
+    @Published var isPaused = false
+    @Published var currentPhase: TimerSession.SessionType = .focus
+    @Published var completedSessions: [TimerSession] = []
+    
+    private var timer: Timer?
+    private let db = Firestore.firestore()
+    private var userId: String?
+    private let hapticService = HapticService.shared
+    
+    // Reference to AppState for settings
+    private weak var appState: AppState?
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        // Initialize with default focus duration
+        timeRemaining = TimeInterval(25 * 60) // 25 minutes default
+        setupTimer()
+    }
+    
+    func setAppState(_ appState: AppState) {
+        self.appState = appState
+        setupSettingsBindings()
+        
+        // Update initial duration with settings
+        if !isRunning {
+            timeRemaining = TimeInterval(getDuration(for: currentPhase) * 60)
+        }
+        
+        print("TimerService: Connected to AppState for settings")
+    }
+    
+    func setUserId(_ uid: String) {
+        self.userId = uid
+        loadLastSession()
+    }
+    
+    private func setupTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateTimer()
+        }
+        timer?.invalidate()
+    }
+    
+    private func setupSettingsBindings() {
+        guard let appState = appState else { return }
+        
+        // Listen to settings changes and update the current phase duration if not running
+        appState.settingsViewModel.$pomodoroDurations
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self, !self.isRunning else { return }
+                // Update time remaining for current phase with new settings
+                self.timeRemaining = TimeInterval(self.getDuration(for: self.currentPhase) * 60)
+                print("TimerService: Updated duration for \(self.currentPhase) based on settings change")
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateTimer() {
+        guard isRunning && !isPaused else { return }
+        
+        if timeRemaining > 0 {
+            timeRemaining -= 1
+        } else {
+            completeSession()
+        }
+    }
+    
+    func startSession(type: TimerSession.SessionType? = nil) {
+        let sessionType = type ?? currentPhase
+        let duration = getDuration(for: sessionType)
+        
+        let session = TimerSession(
+            duration: duration,
+            type: sessionType
+        )
+        
+        currentSession = session
+        currentPhase = sessionType
+        timeRemaining = TimeInterval(duration * 60)
+        isRunning = true
+        isPaused = false
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.timerStart()
+        }
+        
+        // Save session to Firestore
+        saveSessionToFirestore(session)
+        
+        // Start the timer
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateTimer()
+        }
+        
+        print("TimerService: Started \(sessionType) session for \(duration) minutes")
+    }
+    
+    func pauseSession() {
+        isPaused = true
+        timer?.invalidate()
+        timer = nil
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.timerPause()
+        }
+        
+        // Update session in Firestore
+        updateSessionInFirestore()
+    }
+    
+    func resumeSession() {
+        guard isPaused else { return }
+        
+        isPaused = false
+        isRunning = true
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.timerStart()
+        }
+        
+        // Resume the timer
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateTimer()
+        }
+        
+        // Update session in Firestore
+        updateSessionInFirestore()
+    }
+    
+    func resetSession() {
+        timer?.invalidate()
+        timer = nil
+        
+        isRunning = false
+        isPaused = false
+        timeRemaining = 0
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.impact(style: .medium)
+        }
+        
+        // Delete incomplete session from Firestore
+        if let session = currentSession, !session.isCompleted {
+            deleteSessionFromFirestore(session)
+        }
+        
+        currentSession = nil
+    }
+    
+    func skipToNextPhase() {
+        guard let session = currentSession else { return }
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.phaseTransition()
+        }
+        
+        // Complete current session
+        completeSession()
+        
+        // Determine next phase
+        let nextPhase: TimerSession.SessionType
+        switch session.type {
+        case .focus:
+            // After focus, alternate between short and long breaks
+            let focusCount = completedSessions.filter { $0.type == .focus }.count
+            nextPhase = (focusCount % 4 == 0) ? .longBreak : .shortBreak
+        case .shortBreak, .longBreak:
+            nextPhase = .focus
+        }
+        
+        // Start next phase
+        startSession(type: nextPhase)
+    }
+    
+    private func completeSession() {
+        guard let session = currentSession else { return }
+        
+        timer?.invalidate()
+        timer = nil
+        
+        isRunning = false
+        isPaused = false
+        
+        // Haptic feedback (if enabled)
+        if appState?.hapticFeedback == true {
+            hapticService.timerComplete()
+        }
+        
+        // Mark session as completed
+        var completedSession = session
+        completedSession = TimerSession(
+            id: session.id,
+            startTime: session.startTime,
+            endTime: Date(),
+            duration: session.duration,
+            type: session.type,
+            isCompleted: true,
+            taskId: session.taskId,
+            createdAt: session.createdAt,
+            updatedAt: Date()
+        )
+        
+        // Save completed session to Firestore
+        saveCompletedSessionToFirestore(completedSession)
+        
+        // Add to completed sessions
+        completedSessions.append(completedSession)
+        
+        // Clear current session
+        currentSession = nil
+        timeRemaining = 0
+        
+        // Auto-start next phase if enabled
+        handleAutoStart(completedPhase: session.type)
+    }
+    
+    private func handleAutoStart(completedPhase: TimerSession.SessionType) {
+        guard let appState = appState else { return }
+        
+        let shouldAutoStart: Bool
+        let nextPhase: TimerSession.SessionType
+        
+        switch completedPhase {
+        case .focus:
+            // After focus, start break if auto-start break is enabled
+            shouldAutoStart = appState.autoStartBreak
+            let focusCount = completedSessions.filter { $0.type == .focus }.count
+            nextPhase = (focusCount % 4 == 0) ? .longBreak : .shortBreak
+            
+        case .shortBreak, .longBreak:
+            // After break, start focus if auto-start next pomodoro is enabled
+            shouldAutoStart = appState.autoStartNextPomodoro
+            nextPhase = .focus
+        }
+        
+        if shouldAutoStart {
+            print("TimerService: Auto-starting \(nextPhase) phase")
+            // Delay slightly to allow UI to update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.startSession(type: nextPhase)
+            }
+        } else {
+            // Just update the current phase for the UI
+            currentPhase = nextPhase
+            timeRemaining = TimeInterval(getDuration(for: nextPhase) * 60)
+        }
+    }
+    
+    private func getDuration(for type: TimerSession.SessionType) -> Int {
+        guard let appState = appState else {
+            // Fallback to default values if no appState
+            switch type {
+            case .focus: return 25
+            case .shortBreak: return 5
+            case .longBreak: return 15
+            }
+        }
+        
+        switch type {
+        case .focus: return appState.focusDuration
+        case .shortBreak: return appState.shortBreakDuration
+        case .longBreak: return appState.longBreakDuration
+        }
+    }
+    
+    // MARK: - Firestore Operations
+    
+    private func saveSessionToFirestore(_ session: TimerSession) {
+        guard let userId = userId else { return }
+        
+        let sessionRef = db.collection("users").document(userId)
+            .collection("sessions").document(session.id)
+        
+        sessionRef.setData(session.firestoreData) { error in
+            if let error = error {
+                print("Error saving session: \(error)")
+            }
+        }
+    }
+    
+    private func updateSessionInFirestore() {
+        guard let session = currentSession else { return }
+        
+        var updatedSession = session
+        updatedSession = TimerSession(
+            id: session.id,
+            startTime: session.startTime,
+            endTime: nil,
+            duration: session.duration,
+            type: session.type,
+            isCompleted: false,
+            taskId: session.taskId,
+            createdAt: session.createdAt,
+            updatedAt: Date()
+        )
+        
+        saveSessionToFirestore(updatedSession)
+    }
+    
+    private func saveCompletedSessionToFirestore(_ session: TimerSession) {
+        guard let userId = userId else { return }
+        
+        let sessionRef = db.collection("users").document(userId)
+            .collection("sessions").document(session.id)
+        
+        sessionRef.setData(session.firestoreData) { error in
+            if let error = error {
+                print("Error saving completed session: \(error)")
+            }
+        }
+    }
+    
+    private func deleteSessionFromFirestore(_ session: TimerSession) {
+        guard let userId = userId else { return }
+        
+        let sessionRef = db.collection("users").document(userId)
+            .collection("sessions").document(session.id)
+        
+        sessionRef.delete { error in
+            if let error = error {
+                print("Error deleting session: \(error)")
+            }
+        }
+    }
+    
+    private func loadLastSession() {
+        guard let userId = userId else { return }
+        
+        let sessionsRef = db.collection("users").document(userId)
+            .collection("sessions")
+            .order(by: "createdAt", descending: true)
+            .limit(to: 1)
+        
+        sessionsRef.getDocuments { [weak self] snapshot, error in
+            if let error = error {
+                print("Error loading last session: \(error)")
+                return
+            }
+            
+            guard let document = snapshot?.documents.first else { return }
+            
+            if let session = TimerSession.fromFirestore(document.data(), id: document.documentID) {
+                // Only restore if session is not completed and not too old (within last hour)
+                let oneHourAgo = Date().addingTimeInterval(-3600)
+                if !session.isCompleted && session.createdAt > oneHourAgo {
+                    DispatchQueue.main.async {
+                        self?.restoreSession(session)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func restoreSession(_ session: TimerSession) {
+        currentSession = session
+        currentPhase = session.type
+        
+        // Calculate remaining time
+        let elapsed = Date().timeIntervalSince(session.startTime)
+        let totalDuration = TimeInterval(session.duration * 60)
+        timeRemaining = max(0, totalDuration - elapsed)
+        
+        // If there's still time remaining, resume the session
+        if timeRemaining > 0 {
+            isRunning = true
+            isPaused = false
+            
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                self?.updateTimer()
+            }
+        } else {
+            // Session has expired, complete it
+            completeSession()
+        }
+    }
+    
+    deinit {
+        timer?.invalidate()
+    }
+}
