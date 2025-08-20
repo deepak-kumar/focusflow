@@ -84,7 +84,7 @@ class PomodoroViewModel: ObservableObject {
         // Start Live Activity when timer starts
         FocusActivityController.shared.startLiveActivity(
             phase: currentPhase.rawValue,
-            duration: TimeInterval(timeRemaining)
+            totalDuration: TimeInterval(timeRemaining)
         )
         
         startTimerInternal()
@@ -96,12 +96,28 @@ class PomodoroViewModel: ObservableObject {
         guard isRunning, !isPaused else { return }
         isPaused = true
         timer?.invalidate()
+        
+        // Update Live Activity to show paused state
+        FocusActivityController.shared.updateLiveActivity(
+            phase: currentPhase.rawValue,
+            remaining: timeRemaining,
+            progress: progress,
+            isRunning: false
+        )
     }
     
     func resumeTimer() {
         guard isRunning, isPaused else { return }
         isPaused = false
         startTimerInternal()
+        
+        // Update Live Activity to show running state
+        FocusActivityController.shared.updateLiveActivity(
+            phase: currentPhase.rawValue,
+            remaining: timeRemaining,
+            progress: progress,
+            isRunning: true
+        )
     }
     
     func stopTimer() {
@@ -130,6 +146,12 @@ class PomodoroViewModel: ObservableObject {
         }
         
         timeRemaining = currentPhase.duration(settings: settingsViewModel)
+        
+        FocusActivityController.shared.startLiveActivity(
+            phase: (currentPhase == .focus ? "Focus" : "Break"),
+            totalDuration: TimeInterval(timeRemaining)
+        )
+        
         progress = 0.0
     }
     
@@ -162,6 +184,14 @@ class PomodoroViewModel: ObservableObject {
         
         timeRemaining -= 1
         progress = 1.0 - (timeRemaining / currentPhase.duration(settings: settingsViewModel))
+        
+        // Update Live Activity with current progress
+        FocusActivityController.shared.updateLiveActivity(
+            phase: currentPhase.rawValue,
+            remaining: timeRemaining,
+            progress: progress,
+            isRunning: isRunning
+        )
         
         if timeRemaining <= 0 {
             timerCompleted()

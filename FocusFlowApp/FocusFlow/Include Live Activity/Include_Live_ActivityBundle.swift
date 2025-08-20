@@ -11,8 +11,6 @@ import SwiftUI
 @main
 struct Include_Live_ActivityBundle: WidgetBundle {
     var body: some Widget {
-        Include_Live_Activity()
-        Include_Live_ActivityControl()
         Include_Live_ActivityLiveActivity()
     }
 }

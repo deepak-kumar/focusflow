@@ -134,6 +134,38 @@ struct SettingsView: View {
                         }
                     }
                     
+                    // Debug Section (temporary)
+                    #if DEBUG
+                    SettingsSection(title: "Debug Tools", icon: "wrench") {
+                        NavigationLink(destination: LiveActivityDebugView()) {
+                            HStack {
+                                Image(systemName: "ladybug")
+                                    .foregroundColor(.orange)
+                                    .frame(width: 24)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Live Activity Debug")
+                                        .font(.headline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    
+                                    Text("Test Live Activity functionality")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    #endif
+                    
                     // Error message
                     if let errorMessage = viewModel.errorMessage {
                         Text(errorMessage)

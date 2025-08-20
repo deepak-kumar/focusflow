@@ -1,80 +1,95 @@
 import Foundation
-import UserNotifications
+import ActivityKit
 
-class FocusActivityController: ObservableObject {
+/// Bridges the app timer to ActivityKit (Include_Live_ActivityAttributes).
+final class FocusActivityController: ObservableObject {
     static let shared = FocusActivityController()
-    
-    private init() {}
-    
-    // MARK: - Live Activity Management (Placeholder)
-    
-    func startLiveActivity(phase: String, duration: TimeInterval) {
-        print("Live Activity not implemented yet - Phase: \(phase), Duration: \(duration)")
-        // For now, just schedule a notification as fallback
-        NotificationService.shared.scheduleCompletionNotification(
-            title: "Focus Session",
-            body: "\(phase) session completed!",
-            timeInterval: duration
-        )
-    }
-    
-    func updateLiveActivity(remaining: TimeInterval) {
-        print("Live Activity update not implemented yet - Remaining: \(remaining)")
-    }
-    
-    func endLiveActivity() {
-        print("Live Activity end not implemented yet")
-        NotificationService.shared.cancelCompletionNotification()
-    }
-    
-    // MARK: - Helper Methods
-    
-    var hasActiveActivity: Bool {
-        return false
-    }
-    
-    var currentActivityId: String? {
-        return nil
-    }
-}
 
-// MARK: - Notification Service (Fallback)
+    // Keep a handle to the currently running Live Activity
+    private var currentActivity: Activity<Include_Live_ActivityAttributes>?
 
-class NotificationService {
-    static let shared = NotificationService()
-    
     private init() {}
-    
-    func scheduleCompletionNotification(title: String, body: String, timeInterval: TimeInterval) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: timeInterval,
-            repeats: false
+
+    // MARK: - Public API
+
+    /// Start a Live Activity for the given phase and total duration (seconds).
+    func startLiveActivity(phase: String, totalDuration: TimeInterval) {
+        // System-level setting
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("🔕 Live Activities disabled at system level")
+            return
+        }
+
+        // End any existing one we track
+        if let act = currentActivity {
+            let asyncTask = _Concurrency.Task { await act.end(dismissalPolicy: .immediate) }
+            _ = asyncTask
+            currentActivity = nil
+        }
+
+        let attributes = Include_Live_ActivityAttributes(
+            sessionTitle: "Pomodoro Session"
         )
-        
-        let request = UNNotificationRequest(
-            identifier: "pomodoro-completion",
-            content: content,
-            trigger: trigger
+
+        let content = Include_Live_ActivityAttributes.ContentState(
+            phase: phase,
+            remainingTime: totalDuration, // start full
+            progress: 0.0,
+            isRunning: true
         )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Failed to schedule notification: \(error.localizedDescription)")
-            } else {
-                print("Completion notification scheduled for \(Int(timeInterval)) seconds")
-            }
+
+        print("🚀 FocusActivityController: Starting Live Activity")
+        print("📊 areActivitiesEnabled: \(ActivityAuthorizationInfo().areActivitiesEnabled)")
+        print("🎯 phase: \(phase), totalDuration: \(totalDuration)s")
+
+        do {
+            let activity = try Activity<Include_Live_ActivityAttributes>.request(
+                attributes: attributes,
+                contentState: content,
+                pushType: nil
+            )
+            currentActivity = activity
+            print("✅ Live activity started with id: \(activity.id)")
+        } catch {
+            print("❌ Failed to start live activity: \(error.localizedDescription)")
         }
     }
-    
-    func cancelCompletionNotification() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(
-            withIdentifiers: ["pomodoro-completion"]
+
+    /// Update the Live Activity each tick.
+    func updateLiveActivity(phase: String,
+                            remaining: TimeInterval,
+                            progress: Double,
+                            isRunning: Bool)
+    {
+        guard let activity = currentActivity else {
+            // Nothing to update
+            return
+        }
+
+        let content = Include_Live_ActivityAttributes.ContentState(
+            phase: phase,
+            remainingTime: max(remaining, 0),
+            progress: min(max(progress, 0), 1),
+            isRunning: isRunning
         )
-        print("Completion notification cancelled")
+
+        let asyncTask = _Concurrency.Task {
+            await activity.update(using: content)
+        }
+        _ = asyncTask
+    }
+
+    /// End the Live Activity (e.g. on completion/cancel).
+    func endLiveActivity() {
+        guard let activity = currentActivity else {
+            print("ℹ️ No tracked Live Activity to end")
+            return
+        }
+        let asyncTask = _Concurrency.Task {
+            await activity.end(dismissalPolicy: .immediate)
+            print("🛑 Live Activity ended: \(activity.id)")
+        }
+        _ = asyncTask
+        currentActivity = nil
     }
 }

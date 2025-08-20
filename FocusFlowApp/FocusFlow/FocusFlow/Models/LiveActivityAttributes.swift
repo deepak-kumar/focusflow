@@ -7,9 +7,12 @@ import ActivityKit
 struct Include_Live_ActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         // Dynamic stateful properties about your activity go here!
-        var emoji: String
+        var phase: String // "Focus", "Short Break", "Long Break"
+        var remainingTime: TimeInterval // in seconds
+        var progress: Double // 0.0 to 1.0
+        var isRunning: Bool
     }
 
     // Fixed non-changing properties about your activity go here!
-    var name: String
+    var sessionTitle: String // e.g. "Pomodoro Session"
 }

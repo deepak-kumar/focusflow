@@ -69,12 +69,33 @@ class TimerService: ObservableObject {
         
         if timeRemaining > 0 {
             timeRemaining -= 1
+            
+            // Live Activity: Update every tick
+            let total = TimeInterval(getDuration(for: currentPhase) * 60)
+            let remaining = max(timeRemaining, 0)
+            let progress = total > 0 ? (1.0 - (remaining / total)) : 0.0
+
+            let phaseNameForUpdate: String = {
+                switch currentPhase {
+                case .focus: return "Focus"
+                case .shortBreak: return "Short Break"
+                case .longBreak: return "Long Break"
+                }
+            }()
+
+            FocusActivityController.shared.updateLiveActivity(
+                phase: phaseNameForUpdate,
+                remaining: remaining,
+                progress: progress,
+                isRunning: isRunning
+            )
         } else {
             completeSession()
         }
     }
     
     func startSession(type: TimerSession.SessionType? = nil) {
+        print("DEBUG - TimerService.startSession() called from deepak:", #file)
         let sessionType = type ?? currentPhase
         let duration = getDuration(for: sessionType)
         
@@ -88,6 +109,21 @@ class TimerService: ObservableObject {
         timeRemaining = TimeInterval(duration * 60)
         isRunning = true
         isPaused = false
+        
+        // Live Activity: Start
+        let phaseName: String = {
+            switch currentPhase {
+            case .focus: return "Focus"
+            case .shortBreak: return "Short Break"
+            case .longBreak: return "Long Break"
+            }
+        }()
+
+        let totalSeconds = TimeInterval(getDuration(for: currentPhase) * 60)
+        FocusActivityController.shared.startLiveActivity(
+            phase: phaseName,
+            totalDuration: totalSeconds
+        )
         
         // Haptic feedback (if enabled)
         if appState?.hapticFeedback == true {
@@ -110,6 +146,26 @@ class TimerService: ObservableObject {
         timer?.invalidate()
         timer = nil
         
+        // Live Activity: Update to show paused state
+        let total = TimeInterval(getDuration(for: currentPhase) * 60)
+        let remaining = max(timeRemaining, 0)
+        let progress = total > 0 ? (1.0 - (remaining / total)) : 0.0
+
+        let phaseNameForPause: String = {
+            switch currentPhase {
+            case .focus: return "Focus"
+            case .shortBreak: return "Short Break"
+            case .longBreak: return "Long Break"
+            }
+        }()
+
+        FocusActivityController.shared.updateLiveActivity(
+            phase: phaseNameForPause,
+            remaining: remaining,
+            progress: progress,
+            isRunning: false // Show as paused
+        )
+        
         // Haptic feedback (if enabled)
         if appState?.hapticFeedback == true {
             hapticService.timerPause()
@@ -124,6 +180,26 @@ class TimerService: ObservableObject {
         
         isPaused = false
         isRunning = true
+        
+        // Live Activity: Update to show running state
+        let total = TimeInterval(getDuration(for: currentPhase) * 60)
+        let remaining = max(timeRemaining, 0)
+        let progress = total > 0 ? (1.0 - (remaining / total)) : 0.0
+
+        let phaseNameForResume: String = {
+            switch currentPhase {
+            case .focus: return "Focus"
+            case .shortBreak: return "Short Break"
+            case .longBreak: return "Long Break"
+            }
+        }()
+
+        FocusActivityController.shared.updateLiveActivity(
+            phase: phaseNameForResume,
+            remaining: remaining,
+            progress: progress,
+            isRunning: true // Show as running again
+        )
         
         // Haptic feedback (if enabled)
         if appState?.hapticFeedback == true {
@@ -146,6 +222,9 @@ class TimerService: ObservableObject {
         isRunning = false
         isPaused = false
         timeRemaining = 0
+        
+        // End Live Activity
+        FocusActivityController.shared.endLiveActivity()
         
         // Haptic feedback (if enabled)
         if appState?.hapticFeedback == true {
@@ -194,6 +273,9 @@ class TimerService: ObservableObject {
         
         isRunning = false
         isPaused = false
+        
+        // End Live Activity
+        FocusActivityController.shared.endLiveActivity()
         
         // Haptic feedback (if enabled)
         if appState?.hapticFeedback == true {
