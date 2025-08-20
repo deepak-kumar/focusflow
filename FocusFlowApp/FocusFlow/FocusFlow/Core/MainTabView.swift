@@ -5,7 +5,7 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $appState.activeTab) {
-            TimerView()
+            PremiumTimerView()
                 .tabItem {
                     Image(systemName: AppState.Tab.timer.icon)
                     Text(AppState.Tab.timer.title)

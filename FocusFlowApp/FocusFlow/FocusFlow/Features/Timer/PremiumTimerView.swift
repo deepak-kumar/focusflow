@@ -1,55 +1,74 @@
 import SwiftUI
 
+/// Premium UI wrapper that mirrors TimerView functionality (Focus / Short Break / Long Break)
+/// without touching business logic. It reads state from TimerService and calls existing actions.
 struct PremiumTimerView: View {
     @EnvironmentObject var timerService: TimerService
-    @StateObject private var viewModel: TimerViewModel
     @EnvironmentObject var appState: AppState
     
     // Haptic service for micro-interactions
     private let hapticService = HapticService.shared
     
-    init() {
-        // Initialize with a temporary service, will be replaced by environment object
-        let tempService = TimerService()
-        self._viewModel = StateObject(wrappedValue: TimerViewModel(timerService: tempService))
+    // Derive phase name and accent color just like the old TimerView
+    private var phaseName: String {
+        switch timerService.currentPhase {
+        case .focus:       return "Focus"
+        case .shortBreak:  return "Short Break"
+        case .longBreak:   return "Long Break"
+        @unknown default:  return "Focus"
+        }
     }
-    
+
+    private var accent: Color {
+        PhaseTheme.color(for: phaseName)
+    }
+
+    private var timeText: String {
+        // Format time exactly like TimerViewModel does
+        let totalSeconds = max(0, Int(timerService.timeRemaining))
+        let m = totalSeconds / 60
+        let s = totalSeconds % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+
+    private var progressValue: Double {
+        // Calculate progress like TimerViewModel does
+        guard let session = timerService.currentSession else { return 0 }
+        let totalDuration = TimeInterval(session.duration * 60)
+        guard totalDuration > 0 else { return 0 }
+        let elapsed = totalDuration - timerService.timeRemaining
+        return min(1, max(0, elapsed / totalDuration))
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                
-                // Premium Progress Ring in Glass Card
+
                 GlassCard {
                     PremiumProgressRing(
-                        progress: viewModel.progress,
-                        title: viewModel.phaseTitle,
-                        timeText: viewModel.timeString,
-                        accent: PhaseTheme.color(for: viewModel.phaseTitle),
-                        isRunning: viewModel.isRunning
+                        progress: progressValue,
+                        title: phaseName,
+                        timeText: timeText,
+                        accent: accent,
+                        isRunning: timerService.isRunning && !timerService.isPaused
                     )
                     .frame(maxWidth: .infinity, minHeight: 280)
+                    .accessibilityIdentifier("premium-progress-ring")
                 }
-                
-                // Premium Control Bar in Glass Card
+
                 GlassCard {
-                    TimerControlBar(
-                        isRunning: viewModel.isRunning,
-                        canPause: viewModel.canPause,
-                        onStart: { 
-                            startAction()
-                        },
-                        onPause: { 
-                            pauseAction()
-                        },
-                        onReset: { 
-                            resetAction()
-                        },
-                        onSkip: { 
-                            skipAction()
-                        }
+                    PremiumTimerControlBar(
+                        isRunning: timerService.isRunning,
+                        isPaused: timerService.isPaused,
+                        onStart: { timerService.startSession() },
+                        onPause: { timerService.pauseSession() },
+                        onResume: { timerService.resumeSession() },
+                        onReset: { timerService.resetSession() },
+                        onSkip: { timerService.skipToNextPhase() }
                     )
+                    .accessibilityIdentifier("premium-control-bar")
                 }
-                
+
                 // Session Info (enhanced with glass card)
                 if let session = timerService.currentSession {
                     GlassCard(corner: 16) {
@@ -68,15 +87,13 @@ struct PremiumTimerView: View {
         }
         .background(
             LinearGradient(
-                colors: [Color.black.opacity(0.1), Color(.systemBackground)],
-                startPoint: .topLeading, 
-                endPoint: .bottomTrailing
+                colors: [Color.black.opacity(0.08), Color(.systemBackground)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
             )
         )
+        .navigationTitle("Timer")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            // Update viewModel with the injected timerService
-            viewModel.updateTimerService(timerService)
-            
             // Set user ID when view appears
             if let userId = appState.currentUser?.uid {
                 timerService.setUserId(userId)
@@ -87,41 +104,6 @@ struct PremiumTimerView: View {
                 timerService.setUserId(userId)
             }
         }
-    }
-    
-    // MARK: - Action Methods with Haptics
-    
-    private func startAction() {
-        if appState.hapticFeedback {
-            hapticService.timerStart()
-        }
-        
-        if viewModel.canResume {
-            viewModel.resumeTimer()
-        } else {
-            viewModel.startTimer()
-        }
-    }
-    
-    private func pauseAction() {
-        if appState.hapticFeedback {
-            hapticService.timerPause()
-        }
-        viewModel.pauseTimer()
-    }
-    
-    private func resetAction() {
-        if appState.hapticFeedback {
-            hapticService.impact(style: .medium)
-        }
-        viewModel.resetTimer()
-    }
-    
-    private func skipAction() {
-        if appState.hapticFeedback {
-            hapticService.impact(style: .light)
-        }
-        viewModel.skipToNextPhase()
     }
 }
 
