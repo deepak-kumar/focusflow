@@ -58,11 +58,9 @@ struct PremiumTimerView: View {
 
                 GlassCard {
                     PremiumTimerControlBar(
-                        isRunning: timerService.isRunning,
-                        isPaused: timerService.isPaused,
-                        onStart: { timerService.startSession() },
-                        onPause: { timerService.pauseSession() },
-                        onResume: { timerService.resumeSession() },
+                        onFocus: { timerService.startSession(type: .focus) },
+                        onShortBreak: { timerService.startSession(type: .shortBreak) },
+                        onLongBreak: { timerService.startSession(type: .longBreak) },
                         onReset: { timerService.resetSession() },
                         onSkip: { timerService.skipToNextPhase() }
                     )
