@@ -269,8 +269,6 @@ struct TasksView: View {
         case .active: return "play.circle"
         case .completed: return "checkmark.circle"
         case .archived: return "archivebox"
-        case .overdue: return "exclamationmark.triangle"
-        case .highPriority: return "exclamationmark.circle"
         }
     }
     
@@ -280,8 +278,6 @@ struct TasksView: View {
         case .active: return "No Active Tasks"
         case .completed: return "No Completed Tasks"
         case .archived: return "No Archived Tasks"
-        case .overdue: return "No Overdue Tasks"
-        case .highPriority: return "No High Priority Tasks"
         }
     }
     
@@ -291,8 +287,6 @@ struct TasksView: View {
         case .active: return "All your tasks are either completed or archived. Great job staying on top of things!"
         case .completed: return "Complete some tasks to see them here. You're doing great!"
         case .archived: return "No tasks have been archived yet. Keep your task list clean and organized."
-        case .overdue: return "You're all caught up! No overdue tasks at the moment."
-        case .highPriority: return "No high priority tasks right now. Keep up the good work!"
         }
     }
 }
@@ -341,7 +335,9 @@ struct FilterTab: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
+        Button {
+            action()
+        } label: {
             HStack(spacing: 6) {
                 Image(systemName: filter.icon)
                     .font(.caption)
@@ -362,7 +358,8 @@ struct FilterTab: View {
                     )
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .scaleEffect(isSelected ? 1.05 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }

@@ -8,7 +8,6 @@ typealias AsyncTask = _Concurrency.Task
 
 class TaskViewModel: ObservableObject {
     @Published var tasks: [Task] = []
-    @Published var filteredTasks: [Task] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var searchQuery = ""
@@ -20,13 +19,39 @@ class TaskViewModel: ObservableObject {
     private var taskService: TaskService
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Computed Properties
+    
+    /// Filtered tasks based on current filter and search query
+    var filteredTasks: [Task] {
+        var filtered = tasks
+        
+        // Apply search filter
+        if !searchQuery.isEmpty {
+            let lowercaseQuery = searchQuery.lowercased()
+            filtered = filtered.filter { task in
+                task.title.lowercased().contains(lowercaseQuery) ||
+                task.notes.lowercased().contains(lowercaseQuery)
+            }
+        }
+        
+        // Apply category filter using the new status property
+        switch selectedFilter {
+        case .all:
+            return filtered // Show all tasks
+        case .active:
+            return filtered.filter { $0.status == .active }
+        case .completed:
+            return filtered.filter { $0.status == .completed }
+        case .archived:
+            return filtered.filter { $0.status == .archived }
+        }
+    }
+    
     enum TaskFilter: String, CaseIterable {
         case all = "All"
         case active = "Active"
         case completed = "Completed"
         case archived = "Archived"
-        case overdue = "Overdue"
-        case highPriority = "High Priority"
         
         var icon: String {
             switch self {
@@ -34,8 +59,6 @@ class TaskViewModel: ObservableObject {
             case .active: return "play.circle"
             case .completed: return "checkmark.circle"
             case .archived: return "archivebox"
-            case .overdue: return "exclamationmark.triangle"
-            case .highPriority: return "exclamationmark.circle"
             }
         }
     }
@@ -61,7 +84,6 @@ class TaskViewModel: ObservableObject {
         taskService.$tasks
             .sink { [weak self] tasks in
                 self?.tasks = tasks
-                self?.applyFilters()
             }
             .store(in: &cancellables)
         
@@ -76,26 +98,44 @@ class TaskViewModel: ObservableObject {
                 self?.errorMessage = error
             }
             .store(in: &cancellables)
-        
-        // Bind search query changes
-        $searchQuery
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.applyFilters()
-            }
-            .store(in: &cancellables)
-        
-        // Bind filter changes
-        $selectedFilter
-            .sink { [weak self] _ in
-                self?.applyFilters()
-            }
-            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
     
-    func createTask(title: String, notes: String, priority: Task.Priority, estimatedPomodoros: Int, dueDate: Date?) {
+    // Filter management
+    func setFilter(_ filter: TaskFilter) {
+        selectedFilter = filter
+    }
+    
+    // Local update management (for immediate UI feedback)
+    func upsertLocal(_ task: Task) {
+        if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[idx] = task
+        } else {
+            tasks.insert(task, at: 0)
+        }
+    }
+    
+    func removeLocal(id: String) {
+        tasks.removeAll { $0.id == id }
+    }
+    
+    // Save task (upsert semantics)
+    func save(task: Task) async {
+        do {
+            try await taskService.saveTask(task)
+            // Optionally update local immediately for snappy UI, listener will reconcile:
+            await MainActor.run {
+                upsertLocal(task)
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+    
+    func createTask(title: String, notes: String, priority: TaskPriority, estimatedPomodoros: Int, dueDate: Date?) {
         print("TaskViewModel: createTask called")
         
         // Check if we have a userId
@@ -199,35 +239,6 @@ class TaskViewModel: ObservableObject {
                     self.errorMessage = error.localizedDescription
                 }
             }
-        }
-    }
-    
-    private func applyFilters() {
-        var filtered = tasks
-        
-        // Apply search filter
-        if !searchQuery.isEmpty {
-            filtered = taskService.searchTasks(query: searchQuery)
-        }
-        
-        // Apply category filter
-        switch selectedFilter {
-        case .all:
-            filtered = filtered.filter { !$0.isArchived }
-        case .active:
-            filtered = filtered.filter { !$0.isArchived && !$0.isCompleted }
-        case .completed:
-            filtered = filtered.filter { !$0.isArchived && $0.isCompleted }
-        case .archived:
-            filtered = filtered.filter { $0.isArchived }
-        case .overdue:
-            filtered = filtered.filter { $0.isOverdue && !$0.isArchived }
-        case .highPriority:
-            filtered = filtered.filter { $0.priority == .high && !$0.isArchived }
-        }
-        
-        DispatchQueue.main.async {
-            self.filteredTasks = filtered
         }
     }
     

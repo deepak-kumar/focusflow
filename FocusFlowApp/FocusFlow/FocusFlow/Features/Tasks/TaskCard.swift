@@ -36,11 +36,11 @@ struct TaskCard: View {
                 
                 // Priority indicator
                 HStack(spacing: 4) {
-                    Image(systemName: task.priority.icon)
+                    Image(systemName: getPriorityIcon(task.priority))
                         .font(.caption)
                         .foregroundColor(getPriorityColor(task.priority))
                     
-                    Text(task.priority.displayName)
+                    Text(task.priority.rawValue.capitalized)
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(getPriorityColor(task.priority))
@@ -258,11 +258,19 @@ struct TaskCard: View {
     
     // MARK: - Helper Methods
     
-    private func getPriorityColor(_ priority: Task.Priority) -> Color {
+    private func getPriorityColor(_ priority: TaskPriority) -> Color {
         switch priority {
         case .low: return .green
         case .medium: return .orange
         case .high: return .red
+        }
+    }
+    
+    private func getPriorityIcon(_ priority: TaskPriority) -> String {
+        switch priority {
+        case .low: return "arrow.down"
+        case .medium: return "equal"
+        case .high: return "arrow.up"
         }
     }
     

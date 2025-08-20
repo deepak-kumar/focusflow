@@ -1,19 +1,44 @@
 import Foundation
 import FirebaseFirestore
 
+// MARK: - Task Status for Filtering
+enum TaskStatus: String, Codable, CaseIterable, Identifiable {
+    case active, completed, archived
+    var id: String { rawValue }
+}
+
+// MARK: - Task Priority (Enhanced)
+enum TaskPriority: String, Codable, CaseIterable, Identifiable {
+    case low, medium, high
+    var id: String { rawValue }
+}
+
 struct Task: Identifiable, Codable, Equatable {
     let id: String
     var title: String
     var notes: String
     var isCompleted: Bool
     var isArchived: Bool
-    var priority: Priority
+    var priority: TaskPriority
     var estimatedPomodoros: Int
     var completedPomodoros: Int
     var linkedSessionId: String?
     var dueDate: Date?
     var createdAt: Date
     var updatedAt: Date
+    
+    // MARK: - Computed Properties for Filtering
+    
+    /// Status derived from existing isCompleted and isArchived flags for backward compatibility
+    var status: TaskStatus {
+        if isArchived {
+            return .archived
+        } else if isCompleted {
+            return .completed
+        } else {
+            return .active
+        }
+    }
     
     enum Priority: String, Codable, CaseIterable {
         case low = "low"
@@ -47,7 +72,7 @@ struct Task: Identifiable, Codable, Equatable {
     
     // MARK: - Convenience Initializer
     
-    init(title: String, notes: String = "", priority: Priority = .medium, estimatedPomodoros: Int = 1, dueDate: Date? = nil) {
+    init(title: String, notes: String = "", priority: TaskPriority = .medium, estimatedPomodoros: Int = 1, dueDate: Date? = nil) {
         self.id = UUID().uuidString
         self.title = title
         self.notes = notes
@@ -63,7 +88,7 @@ struct Task: Identifiable, Codable, Equatable {
     }
     
     // MARK: - Full Initializer (for Firestore)
-    init(id: String, title: String, notes: String, isCompleted: Bool, isArchived: Bool, priority: Priority, estimatedPomodoros: Int, completedPomodoros: Int, linkedSessionId: String?, dueDate: Date?, createdAt: Date, updatedAt: Date) {
+    init(id: String, title: String, notes: String, isCompleted: Bool, isArchived: Bool, priority: TaskPriority, estimatedPomodoros: Int, completedPomodoros: Int, linkedSessionId: String?, dueDate: Date?, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -150,7 +175,7 @@ struct Task: Identifiable, Codable, Equatable {
               let isCompleted = data["isCompleted"] as? Bool,
               let isArchived = data["isArchived"] as? Bool,
               let priorityRaw = data["priority"] as? String,
-              let priority = Priority(rawValue: priorityRaw),
+              let priority = TaskPriority(rawValue: priorityRaw),
               let estimatedPomodoros = data["estimatedPomodoros"] as? Int,
               let completedPomodoros = data["completedPomodoros"] as? Int,
               let createdAtData = data["createdAt"] as? Timestamp,

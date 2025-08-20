@@ -8,7 +8,7 @@ struct AddEditTaskView: View {
     
     @State private var title = ""
     @State private var notes = ""
-    @State private var priority: Task.Priority = .medium
+    @State private var priority: TaskPriority = .medium
     @State private var estimatedPomodoros = 1
     @State private var hasDueDate = false
     @State private var dueDate = Date()
@@ -68,19 +68,10 @@ struct AddEditTaskView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                // Priority Section
+                // Priority Section - Premium Chips
                 Section {
-                    Picker("Priority", selection: $priority) {
-                        ForEach(Task.Priority.allCases, id: \.self) { priority in
-                            HStack {
-                                Image(systemName: priority.icon)
-                                    .foregroundColor(getPriorityColor(priority))
-                                Text(priority.displayName)
-                            }
-                            .tag(priority)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    PriorityChips(selection: $priority)
+                        .padding(.vertical, 4)
                 } header: {
                     Text("Priority")
                 } footer: {
@@ -180,22 +171,51 @@ struct AddEditTaskView: View {
     // MARK: - Private Methods
     
     private func saveTask() {
-        let newTask = Task(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            priority: priority,
-            estimatedPomodoros: estimatedPomodoros,
-            dueDate: hasDueDate ? dueDate : nil
-        )
+        let taskToSave: Task
         
-        onSave(newTask)
+        if isEditing, let existingTask = task {
+            // PRESERVE THE ORIGINAL ID when editing - NO new UUID!
+            taskToSave = Task(
+                id: existingTask.id, // Keep same ID
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                isCompleted: existingTask.isCompleted, // Preserve completion status
+                isArchived: existingTask.isArchived, // Preserve archived status
+                priority: priority,
+                estimatedPomodoros: estimatedPomodoros,
+                completedPomodoros: existingTask.completedPomodoros, // Preserve progress
+                linkedSessionId: existingTask.linkedSessionId, // Preserve session link
+                dueDate: hasDueDate ? dueDate : nil,
+                createdAt: existingTask.createdAt, // Preserve creation date
+                updatedAt: Date() // Update modification date
+            )
+        } else {
+            // For new tasks, use the convenience init which generates a new UUID
+            taskToSave = Task(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                priority: priority,
+                estimatedPomodoros: estimatedPomodoros,
+                dueDate: hasDueDate ? dueDate : nil
+            )
+        }
+        
+        onSave(taskToSave)
     }
     
-    private func getPriorityColor(_ priority: Task.Priority) -> Color {
+    private func getPriorityColor(_ priority: TaskPriority) -> Color {
         switch priority {
         case .low: return .green
         case .medium: return .orange
         case .high: return .red
+        }
+    }
+    
+    private func getPriorityIcon(_ priority: TaskPriority) -> String {
+        switch priority {
+        case .low: return "arrow.down"
+        case .medium: return "equal"
+        case .high: return "arrow.up"
         }
     }
 }
@@ -203,7 +223,7 @@ struct AddEditTaskView: View {
 struct TaskPreviewCard: View {
     let title: String
     let notes: String
-    let priority: Task.Priority
+    let priority: TaskPriority
     let estimatedPomodoros: Int
     let dueDate: Date?
     
@@ -224,11 +244,11 @@ struct TaskPreviewCard: View {
                 
                 // Priority badge
                 HStack(spacing: 4) {
-                    Image(systemName: priority.icon)
+                    Image(systemName: getPriorityIcon(priority))
                         .font(.caption)
                         .foregroundColor(getPriorityColor(priority))
                     
-                    Text(priority.displayName)
+                    Text(priority.rawValue.capitalized)
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(getPriorityColor(priority))
@@ -301,11 +321,19 @@ struct TaskPreviewCard: View {
         )
     }
     
-    private func getPriorityColor(_ priority: Task.Priority) -> Color {
+    private func getPriorityColor(_ priority: TaskPriority) -> Color {
         switch priority {
         case .low: return .green
         case .medium: return .orange
         case .high: return .red
+        }
+    }
+    
+    private func getPriorityIcon(_ priority: TaskPriority) -> String {
+        switch priority {
+        case .low: return "arrow.down"
+        case .medium: return "equal"
+        case .high: return "arrow.up"
         }
     }
     
@@ -324,6 +352,48 @@ struct TaskPreviewCard: View {
             formatter.dateFormat = "MMM d"
             return formatter.string(from: date)
         }
+    }
+}
+
+// MARK: - Premium Priority Chips
+struct PriorityChips: View {
+    @Binding var selection: TaskPriority
+
+    var body: some View {
+        HStack(spacing: 10) {
+            chip(.low,    icon: "arrow.down",    color: .green)
+            chip(.medium, icon: "equal",         color: .orange)
+            chip(.high,   icon: "arrow.up",      color: .red)
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func chip(_ value: TaskPriority, icon: String, color: Color) -> some View {
+        Button {
+            selection = value
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.semibold))
+                Text(value.rawValue.capitalized)
+                    .font(.footnote.weight(.semibold))
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(selection == value ? color.opacity(0.18) : Color.secondary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(selection == value ? color : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(selection == value ? color : .primary)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("priority-\(value.rawValue)")
     }
 }
 

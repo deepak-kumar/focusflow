@@ -73,20 +73,19 @@ class TaskService: ObservableObject {
     // MARK: - CRUD Operations
     
     func createTask(_ task: Task) async throws {
-        print("TaskService: createTask called, userId: \(userId ?? "nil")")
         guard let userId = userId else {
             print("TaskService: User not authenticated - userId is nil")
             throw TaskError.userNotAuthenticated
         }
         
-        print("TaskService: Creating task for user \(userId)")
         isLoading = true
         defer { isLoading = false }
         
         let taskRef = db.collection("users").document(userId)
             .collection("tasks").document(task.id)
         
-        try await taskRef.setData(task.firestoreData)
+        // Use merge: false for create to ensure new document
+        try await taskRef.setData(task.firestoreData, merge: false)
         
         hapticService.impact(style: .light)
     }
@@ -96,12 +95,36 @@ class TaskService: ObservableObject {
             throw TaskError.userNotAuthenticated
         }
         
+        // Ensure updatedAt is current
+        var updated = task
+        updated.updatedAt = Date()
+        
         let taskRef = db.collection("users").document(userId)
             .collection("tasks").document(task.id)
         
-        try await taskRef.setData(task.firestoreData)
+        // Use merge: true for updates to avoid overwriting
+        try await taskRef.setData(updated.firestoreData, merge: true)
         
         hapticService.impact(style: .light)
+    }
+    
+    // Upsert: If task exists, update; otherwise create
+    func saveTask(_ task: Task) async throws {
+        guard let userId = userId else {
+            throw TaskError.userNotAuthenticated
+        }
+        
+        let taskRef = db.collection("users").document(userId)
+            .collection("tasks").document(task.id)
+        
+        // Check if document exists
+        let snapshot = try await taskRef.getDocument()
+        
+        if snapshot.exists {
+            try await updateTask(task)
+        } else {
+            try await createTask(task)
+        }
     }
     
     func deleteTask(_ task: Task) async throws {
@@ -176,7 +199,7 @@ class TaskService: ObservableObject {
         return tasks.filter { $0.isArchived }
     }
     
-    func getTasksByPriority(_ priority: Task.Priority) -> [Task] {
+    func getTasksByPriority(_ priority: TaskPriority) -> [Task] {
         return tasks.filter { $0.priority == priority && !$0.isArchived }
     }
     
