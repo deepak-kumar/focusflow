@@ -15,6 +15,14 @@ class TimerService: ObservableObject {
     private var userId: String?
     private let hapticService = HapticService.shared
     
+    // Precise timer implementation
+    private var tickTimer: DispatchSourceTimer?
+    private let timerQueue = DispatchQueue(label: "com.focusflow.timer", qos: .userInitiated)
+    private var sessionStartDate: Date?
+    private var accumulatedElapsed: TimeInterval = 0
+    private var sessionTotalSeconds: TimeInterval = 0
+    private var lastTickLogTime: Date = Date()
+    
     // Reference to AppState for settings
     private weak var appState: AppState?
     private var cancellables = Set<AnyCancellable>()
@@ -94,10 +102,62 @@ class TimerService: ObservableObject {
         }
     }
     
+    private func onTick() {
+        // Compute elapsed using sessionStartDate + accumulatedElapsed for correctness
+        guard !isPaused, isRunning else { return }
+        let now = Date()
+        let elapsed = accumulatedElapsed + (now.timeIntervalSince(sessionStartDate ?? now))
+        let remaining = max(sessionTotalSeconds - elapsed, 0)
+        
+        // Update model on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.timeRemaining = remaining
+            
+            // Update progress based on total seconds to preserve original behavior
+            let total = max(self.sessionTotalSeconds, 1)
+            let progress = 1.0 - (remaining / total)
+            
+            // Log every ~5 seconds to avoid spam
+            let now = Date()
+            if now.timeIntervalSince(self.lastTickLogTime) >= 5.0 {
+                print("TimerService: onTick remaining=\(Int(remaining))s, progress=\(String(format: "%.2f", progress))")
+                self.lastTickLogTime = now
+            }
+            
+            // Live Activity update (keep the existing controller calls/shape)
+            let phaseNameForUpdate: String = {
+                switch self.currentPhase {
+                case .focus: return "Focus"
+                case .shortBreak: return "Short Break"
+                case .longBreak: return "Long Break"
+                }
+            }()
+            
+            FocusActivityController.shared.updateLiveActivity(
+                phase: phaseNameForUpdate,
+                remaining: remaining,
+                progress: progress,
+                isRunning: !self.isPaused
+            )
+            
+            if remaining <= 0.001 {
+                self.completeSession()
+            }
+        }
+    }
+    
     func startSession(type: TimerSession.SessionType? = nil) {
-        print("DEBUG - TimerService.startSession() called from deepak:", #file)
         let sessionType = type ?? currentPhase
         let duration = getDuration(for: sessionType)
+        
+        print("TimerService: startSession type=\(sessionType), duration=\(duration)min")
+        
+        // ALWAYS invalidate and nil out any existing timers before creating new one
+        timer?.invalidate()
+        timer = nil
+        tickTimer?.cancel()
+        tickTimer = nil
         
         let session = TimerSession(
             duration: duration,
@@ -106,9 +166,20 @@ class TimerService: ObservableObject {
         
         currentSession = session
         currentPhase = sessionType
-        timeRemaining = TimeInterval(duration * 60)
+        sessionTotalSeconds = TimeInterval(duration * 60)
+        timeRemaining = sessionTotalSeconds
+        sessionStartDate = Date()
+        accumulatedElapsed = 0
         isRunning = true
         isPaused = false
+        
+        print("TimerService: startSession flags isRunning=\(isRunning), isPaused=\(isPaused)")
+        
+        // Create DispatchSourceTimer on timerQueue
+        tickTimer = DispatchSource.makeTimerSource(queue: timerQueue)
+        tickTimer?.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
+        tickTimer?.setEventHandler { [weak self] in self?.onTick() }
+        tickTimer?.resume()
         
         // Live Activity: Start
         let phaseName: String = {
@@ -119,10 +190,9 @@ class TimerService: ObservableObject {
             }
         }()
 
-        let totalSeconds = TimeInterval(getDuration(for: currentPhase) * 60)
         FocusActivityController.shared.startLiveActivity(
             phase: phaseName,
-            totalDuration: totalSeconds
+            totalDuration: sessionTotalSeconds
         )
         
         // Haptic feedback (if enabled)
@@ -133,18 +203,23 @@ class TimerService: ObservableObject {
         // Save session to Firestore
         saveSessionToFirestore(session)
         
-        // Start the timer
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimer()
-        }
-        
         print("TimerService: Started \(sessionType) session for \(duration) minutes")
     }
     
     func pauseSession() {
+        guard isRunning && !isPaused else { return }
+        
+        // Update accumulatedElapsed with time since session started/resumed
+        accumulatedElapsed += Date().timeIntervalSince(sessionStartDate ?? Date())
         isPaused = true
+        
+        print("TimerService: pauseSession accumulatedElapsed=\(Int(accumulatedElapsed))s, flags isRunning=\(isRunning), isPaused=\(isPaused)")
+        
+        // Cancel DispatchSourceTimer and old timer
         timer?.invalidate()
         timer = nil
+        tickTimer?.cancel()
+        tickTimer = nil
         
         // Live Activity: Update to show paused state
         let total = TimeInterval(getDuration(for: currentPhase) * 60)
@@ -176,10 +251,24 @@ class TimerService: ObservableObject {
     }
     
     func resumeSession() {
-        guard isPaused else { return }
+        guard isRunning && isPaused else { return }
         
+        // Reset session start date for elapsed calculation
+        sessionStartDate = Date()
         isPaused = false
-        isRunning = true
+        
+        print("TimerService: resumeSession accumulatedElapsed=\(Int(accumulatedElapsed))s, flags isRunning=\(isRunning), isPaused=\(isPaused)")
+        
+        // Recreate the DispatchSourceTimer exactly as in startSession()
+        tickTimer?.cancel()
+        tickTimer = nil
+        timer?.invalidate()
+        timer = nil
+        
+        tickTimer = DispatchSource.makeTimerSource(queue: timerQueue)
+        tickTimer?.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
+        tickTimer?.setEventHandler { [weak self] in self?.onTick() }
+        tickTimer?.resume()
         
         // Live Activity: Update to show running state
         let total = TimeInterval(getDuration(for: currentPhase) * 60)
@@ -206,22 +295,24 @@ class TimerService: ObservableObject {
             hapticService.timerStart()
         }
         
-        // Resume the timer
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimer()
-        }
-        
         // Update session in Firestore
         updateSessionInFirestore()
     }
     
     func resetSession() {
+        print("TimerService: resetSession reason=user_reset")
+        
+        // Cancel & nil both timers safely
         timer?.invalidate()
         timer = nil
+        tickTimer?.cancel()
+        tickTimer = nil
         
         isRunning = false
         isPaused = false
         timeRemaining = 0
+        accumulatedElapsed = 0
+        sessionStartDate = nil
         
         // End Live Activity
         FocusActivityController.shared.endLiveActivity()
@@ -268,11 +359,18 @@ class TimerService: ObservableObject {
     private func completeSession() {
         guard let session = currentSession else { return }
         
+        print("TimerService: completeSession reason=timer_completed")
+        
+        // Cancel & nil both timers safely
         timer?.invalidate()
         timer = nil
+        tickTimer?.cancel()
+        tickTimer = nil
         
         isRunning = false
         isPaused = false
+        accumulatedElapsed = 0
+        sessionStartDate = nil
         
         // End Live Activity
         FocusActivityController.shared.endLiveActivity()

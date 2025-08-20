@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// Premium control bar with 5 clear buttons: Focus, Short Break, Long Break, Reset, Skip
+/// Premium control bar with 6 clear buttons: Focus, Short Break, Long Break, Pause/Resume, Reset, Skip
 /// Each button has premium styling, never wraps text, and scales well with Dynamic Type
 struct PremiumTimerControlBar: View {
+    var isRunning: Bool
+    var isPaused: Bool
     var onFocus: () -> Void
     var onShortBreak: () -> Void
     var onLongBreak: () -> Void
+    var onPause: () -> Void
+    var onResume: () -> Void
     var onReset: () -> Void
     var onSkip: () -> Void
 
@@ -35,8 +39,33 @@ struct PremiumTimerControlBar: View {
                 )
             }
             
-            // Bottom row: Reset, Skip
+            // Bottom row: Pause/Resume, Reset, Skip
             HStack(spacing: 12) {
+                // Pause/Resume button - shown only when timer is running
+                if isRunning {
+                    if isPaused {
+                        premiumButton(
+                            title: "Resume",
+                            icon: "play.fill",
+                            color: .accentColor,
+                            action: onResume,
+                            style: .accent
+                        )
+                    } else {
+                        premiumButton(
+                            title: "Pause",
+                            icon: "pause.fill",
+                            color: .orange,
+                            action: onPause,
+                            style: .accent
+                        )
+                    }
+                } else {
+                    // Spacer when timer not running
+                    Spacer()
+                        .frame(maxWidth: .infinity)
+                }
+                
                 premiumButton(
                     title: "Reset",
                     icon: "arrow.counterclockwise",
@@ -52,10 +81,6 @@ struct PremiumTimerControlBar: View {
                     action: onSkip,
                     style: .neutral
                 )
-                
-                // Spacer to balance layout
-                Spacer()
-                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, 8)
@@ -162,9 +187,13 @@ struct PremiumButtonStyle: ButtonStyle {
         
         GlassCard {
             PremiumTimerControlBar(
+                isRunning: true,
+                isPaused: false,
                 onFocus: { print("Focus started") },
                 onShortBreak: { print("Short Break started") },
                 onLongBreak: { print("Long Break started") },
+                onPause: { print("Timer paused") },
+                onResume: { print("Timer resumed") },
                 onReset: { print("Timer reset") },
                 onSkip: { print("Phase skipped") }
             )
