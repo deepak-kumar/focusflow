@@ -49,7 +49,7 @@ class PomodoroViewModel: ObservableObject {
         
         setupBindings()
         
-        print("PomodoroViewModel: Initialized with settings - Focus: \(settingsViewModel.pomodoroDurations.focusDuration)min, Short: \(settingsViewModel.pomodoroDurations.shortBreakDuration)min, Long: \(settingsViewModel.pomodoroDurations.longBreakDuration)min")
+        print("[PomodoroViewModel] initialized with settings focus:\(settingsViewModel.pomodoroDurations.focusDuration)min short:\(settingsViewModel.pomodoroDurations.shortBreakDuration)min long:\(settingsViewModel.pomodoroDurations.longBreakDuration)min")
     }
     
     deinit {
@@ -89,7 +89,7 @@ class PomodoroViewModel: ObservableObject {
         
         startTimerInternal()
         
-        print("PomodoroViewModel: Starting \(currentPhase.rawValue) timer for \(Int(phaseDuration/60)) minutes")
+        print("[PomodoroViewModel] starting \(currentPhase.rawValue) timer for \(Int(phaseDuration/60)) minutes")
     }
     
     func pauseTimer() {
@@ -162,7 +162,7 @@ class PomodoroViewModel: ObservableObject {
         settingsViewModel.$pomodoroDurations
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newDurations in
-                print("PomodoroViewModel: Settings changed - Focus: \(newDurations.focusDuration)min, Short: \(newDurations.shortBreakDuration)min, Long: \(newDurations.longBreakDuration)min")
+                print("[PomodoroViewModel] settings changed focus:\(newDurations.focusDuration)min short:\(newDurations.shortBreakDuration)min long:\(newDurations.longBreakDuration)min")
                 
                 // If timer is not running, update the current phase duration
                 if let self = self, !self.isRunning {
@@ -211,7 +211,7 @@ class PomodoroViewModel: ObservableObject {
                 do {
                     try await self.taskService.incrementPomodoros(for: task)
                 } catch {
-                    print("Failed to increment pomodoros: \(error)")
+                    print("[PomodoroViewModel] failed to increment pomodoros: \(error)")
                 }
             }
         }
@@ -230,7 +230,7 @@ class PomodoroViewModel: ObservableObject {
     private func saveCompletedSession(_ session: TimerSession) {
         // This would typically save to Firestore
         // For now, we'll just log it
-        print("Session completed: \(session)")
+        print("[PomodoroViewModel] session completed:\(session.id)")
     }
     
     private func getSessionType() -> TimerSession.SessionType {

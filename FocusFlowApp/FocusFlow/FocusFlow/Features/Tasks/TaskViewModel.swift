@@ -136,11 +136,11 @@ class TaskViewModel: ObservableObject {
     }
     
     func createTask(title: String, notes: String, priority: TaskPriority, estimatedPomodoros: Int, dueDate: Date?) {
-        print("TaskViewModel: createTask called")
+        print("[TaskViewModel] createTask called")
         
         // Check if we have a userId
         guard taskService.hasUserId else {
-            print("TaskViewModel: No userId available, cannot create task")
+            print("[TaskViewModel] no userId available cannot create task")
             errorMessage = "User not authenticated. Please wait for authentication to complete."
             return
         }

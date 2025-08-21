@@ -60,7 +60,6 @@
             ReferencedContainer = "container:FocusFlow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

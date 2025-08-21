@@ -100,14 +100,14 @@ struct LiveActivityDebugView: View {
         areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
         activeActivitiesCount = Activity<Include_Live_ActivityAttributes>.activities.count
         
-        print("🔍 LiveActivityDebug: Activities enabled: \(areActivitiesEnabled)")
-        print("🔍 LiveActivityDebug: Active activities count: \(activeActivitiesCount)")
+                        print("[LiveActivityDebug] activities enabled:\(areActivitiesEnabled)")
+                print("[LiveActivityDebug] active activities count:\(activeActivitiesCount)")
         
         lastActionResult = "Status refreshed at \(Date().formatted(date: .omitted, time: .standard))"
     }
     
     private func startTestActivity() {
-        print("🧪 LiveActivityDebug: Starting test activity...")
+                        print("[LiveActivityDebug] starting test activity")
         
         lastActionResult = "Starting test activity..."
         
@@ -122,25 +122,25 @@ struct LiveActivityDebugView: View {
             lastActionResult = "Test activity started at \(Date().formatted(date: .omitted, time: .standard))"
         }
         
-        print("🧪 LiveActivityDebug: Test activity start requested")
+                        print("[LiveActivityDebug] test activity start requested")
     }
     
     private func endAllActivities() {
-        print("🧪 LiveActivityDebug: Ending all activities...")
+                        print("[LiveActivityDebug] ending all activities")
         
         let activities = Activity<Include_Live_ActivityAttributes>.activities
         lastActionResult = "Ending \(activities.count) activities..."
         
-        print("🧪 LiveActivityDebug: Found \(activities.count) activities to end")
+                        print("[LiveActivityDebug] found \(activities.count) activities to end")
         
         if activities.isEmpty {
             lastActionResult = "No activities to end"
-            print("🧪 LiveActivityDebug: No activities found to end")
+                            print("[LiveActivityDebug] no activities found to end")
             return
         }
         
         for activity in activities {
-            print("🧪 LiveActivityDebug: Ending activity with ID: \(activity.id)")
+                            print("[LiveActivityDebug] ending activity id:\(activity.id)")
             
             let asyncTask = _Concurrency.Task {
                 do {
@@ -148,9 +148,9 @@ struct LiveActivityDebugView: View {
                         .init(state: activity.content.state, staleDate: nil),
                         dismissalPolicy: .immediate
                     )
-                    print("🧪 LiveActivityDebug: Successfully ended activity: \(activity.id)")
+                    print("[LiveActivityDebug] successfully ended activity:\(activity.id)")
                 } catch {
-                    print("🧪 LiveActivityDebug: Failed to end activity \(activity.id): \(error)")
+                                          print("[LiveActivityDebug] failed to end activity \(activity.id): \(error)")
                 }
             }
             _ = asyncTask
@@ -165,7 +165,7 @@ struct LiveActivityDebugView: View {
             lastActionResult = "All activities ended at \(Date().formatted(date: .omitted, time: .standard))"
         }
         
-        print("🧪 LiveActivityDebug: All activities end requested")
+                        print("[LiveActivityDebug] all activities end requested")
     }
 }
 

@@ -100,18 +100,18 @@ struct TasksView: View {
             
             // Set user ID when view appears
             if let userId = appState.currentUser?.uid {
-                print("TasksView: Setting userId to \(userId) on appear")
+                print("[TasksView] setting userId:\(userId) on appear")
                 taskService.setUserId(userId)
             } else {
-                print("TasksView: No userId available on appear, appState.currentUser: \(appState.currentUser?.uid ?? "nil")")
+                print("[TasksView] no userId available on appear")
             }
         }
         .onChange(of: appState.currentUser?.uid) { newUserId in
             if let userId = newUserId {
-                print("TasksView: Setting userId to \(userId) on change")
+                print("[TasksView] setting userId:\(userId) on change")
                 taskService.setUserId(userId)
             } else {
-                print("TasksView: userId changed to nil")
+                print("[TasksView] userId changed to nil")
             }
         }
     }

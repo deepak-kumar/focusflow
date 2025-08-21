@@ -16,16 +16,17 @@ final class FocusActivityController: ObservableObject {
     func startLiveActivity(phase: String, totalDuration: TimeInterval) {
         // System-level setting
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            print("🔕 Live Activities disabled at system level")
-            return
-        }
+                    print("[LiveActivity] disabled at system level")
+        return
+    }
 
-        // End any existing one we track
-        if let act = currentActivity {
-            let asyncTask = _Concurrency.Task { await act.end(dismissalPolicy: .immediate) }
-            _ = asyncTask
-            currentActivity = nil
-        }
+    // End any existing one we track
+    if let act = currentActivity {
+        // TODO: iOS 17+ - Use end(content:dismissalPolicy:) instead of end(dismissalPolicy:)
+        let asyncTask = _Concurrency.Task { await act.end(dismissalPolicy: .immediate) }
+        _ = asyncTask
+        currentActivity = nil
+    }
 
         let attributes = Include_Live_ActivityAttributes(
             sessionTitle: "Pomodoro Session"
@@ -38,20 +39,19 @@ final class FocusActivityController: ObservableObject {
             isRunning: true
         )
 
-        print("🚀 FocusActivityController: Starting Live Activity")
-        print("📊 areActivitiesEnabled: \(ActivityAuthorizationInfo().areActivitiesEnabled)")
-        print("🎯 phase: \(phase), totalDuration: \(totalDuration)s")
+        print("[LiveActivity] start \(phase) \(Int(totalDuration))s")
 
         do {
+            // TODO: iOS 17+ - Use request(attributes:content:pushType:) instead of request(attributes:contentState:pushType:)
             let activity = try Activity<Include_Live_ActivityAttributes>.request(
                 attributes: attributes,
                 contentState: content,
                 pushType: nil
             )
             currentActivity = activity
-            print("✅ Live activity started with id: \(activity.id)")
+            print("[LiveActivity] started id:\(activity.id)")
         } catch {
-            print("❌ Failed to start live activity: \(error.localizedDescription)")
+            print("[LiveActivity] failed to start: \(error.localizedDescription)")
         }
     }
 
@@ -73,6 +73,7 @@ final class FocusActivityController: ObservableObject {
             isRunning: isRunning
         )
 
+        // TODO: iOS 17+ - Use update(_:) instead of update(using:)
         let asyncTask = _Concurrency.Task {
             await activity.update(using: content)
         }
@@ -82,13 +83,14 @@ final class FocusActivityController: ObservableObject {
     /// End the Live Activity (e.g. on completion/cancel).
     func endLiveActivity() {
         guard let activity = currentActivity else {
-            print("ℹ️ No tracked Live Activity to end")
-            return
-        }
-        let asyncTask = _Concurrency.Task {
-            await activity.end(dismissalPolicy: .immediate)
-            print("🛑 Live Activity ended: \(activity.id)")
-        }
+                    print("[LiveActivity] nothing to end")
+        return
+    }
+    // TODO: iOS 17+ - Use end(content:dismissalPolicy:) instead of end(dismissalPolicy:)
+    let asyncTask = _Concurrency.Task {
+        await activity.end(dismissalPolicy: .immediate)
+        print("[LiveActivity] ended id:\(activity.id)")
+    }
         _ = asyncTask
         currentActivity = nil
     }

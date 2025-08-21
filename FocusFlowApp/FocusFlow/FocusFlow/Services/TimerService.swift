@@ -10,7 +10,6 @@ class TimerService: ObservableObject {
     @Published var currentPhase: TimerSession.SessionType = .focus
     @Published var completedSessions: [TimerSession] = []
     
-    private var timer: Timer?
     private let db = Firestore.firestore()
     private var userId: String?
     private let hapticService = HapticService.shared
@@ -30,7 +29,6 @@ class TimerService: ObservableObject {
     init() {
         // Initialize with default focus duration
         timeRemaining = TimeInterval(25 * 60) // 25 minutes default
-        setupTimer()
     }
     
     func setAppState(_ appState: AppState) {
@@ -42,19 +40,12 @@ class TimerService: ObservableObject {
             timeRemaining = TimeInterval(getDuration(for: currentPhase) * 60)
         }
         
-        print("TimerService: Connected to AppState for settings")
+        print("[TimerService] Connected to AppState for settings")
     }
     
     func setUserId(_ uid: String) {
         self.userId = uid
         loadLastSession()
-    }
-    
-    private func setupTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimer()
-        }
-        timer?.invalidate()
     }
     
     private func setupSettingsBindings() {
@@ -67,39 +58,9 @@ class TimerService: ObservableObject {
                 guard let self = self, !self.isRunning else { return }
                 // Update time remaining for current phase with new settings
                 self.timeRemaining = TimeInterval(self.getDuration(for: self.currentPhase) * 60)
-                print("TimerService: Updated duration for \(self.currentPhase) based on settings change")
+                print("[TimerService] settings updated \(self.currentPhase)")
             }
             .store(in: &cancellables)
-    }
-    
-    private func updateTimer() {
-        guard isRunning && !isPaused else { return }
-        
-        if timeRemaining > 0 {
-            timeRemaining -= 1
-            
-            // Live Activity: Update every tick
-            let total = TimeInterval(getDuration(for: currentPhase) * 60)
-            let remaining = max(timeRemaining, 0)
-            let progress = total > 0 ? (1.0 - (remaining / total)) : 0.0
-
-            let phaseNameForUpdate: String = {
-                switch currentPhase {
-                case .focus: return "Focus"
-                case .shortBreak: return "Short Break"
-                case .longBreak: return "Long Break"
-                }
-            }()
-
-            FocusActivityController.shared.updateLiveActivity(
-                phase: phaseNameForUpdate,
-                remaining: remaining,
-                progress: progress,
-                isRunning: isRunning
-            )
-        } else {
-            completeSession()
-        }
     }
     
     private func onTick() {
@@ -121,7 +82,7 @@ class TimerService: ObservableObject {
             // Log every ~5 seconds to avoid spam
             let now = Date()
             if now.timeIntervalSince(self.lastTickLogTime) >= 5.0 {
-                print("TimerService: onTick remaining=\(Int(remaining))s, progress=\(String(format: "%.2f", progress))")
+                print("[TimerService] tick t-\(Int(remaining))s")
                 self.lastTickLogTime = now
             }
             
@@ -151,11 +112,9 @@ class TimerService: ObservableObject {
         let sessionType = type ?? currentPhase
         let duration = getDuration(for: sessionType)
         
-        print("TimerService: startSession type=\(sessionType), duration=\(duration)min")
+        print("[TimerService] start \(sessionType) \(duration)min")
         
         // ALWAYS invalidate and nil out any existing timers before creating new one
-        timer?.invalidate()
-        timer = nil
         tickTimer?.cancel()
         tickTimer = nil
         
@@ -173,8 +132,6 @@ class TimerService: ObservableObject {
         isRunning = true
         isPaused = false
         
-        print("TimerService: startSession flags isRunning=\(isRunning), isPaused=\(isPaused)")
-        
         // Create DispatchSourceTimer on timerQueue
         tickTimer = DispatchSource.makeTimerSource(queue: timerQueue)
         tickTimer?.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
@@ -186,7 +143,7 @@ class TimerService: ObservableObject {
             switch currentPhase {
             case .focus: return "Focus"
             case .shortBreak: return "Short Break"
-            case .longBreak: return "Long Break"
+            case .longBreak: return "LongBreak"
             }
         }()
 
@@ -202,8 +159,6 @@ class TimerService: ObservableObject {
         
         // Save session to Firestore
         saveSessionToFirestore(session)
-        
-        print("TimerService: Started \(sessionType) session for \(duration) minutes")
     }
     
     func pauseSession() {
@@ -213,11 +168,9 @@ class TimerService: ObservableObject {
         accumulatedElapsed += Date().timeIntervalSince(sessionStartDate ?? Date())
         isPaused = true
         
-        print("TimerService: pauseSession accumulatedElapsed=\(Int(accumulatedElapsed))s, flags isRunning=\(isRunning), isPaused=\(isPaused)")
+        print("[TimerService] pause")
         
-        // Cancel DispatchSourceTimer and old timer
-        timer?.invalidate()
-        timer = nil
+        // Cancel DispatchSourceTimer
         tickTimer?.cancel()
         tickTimer = nil
         
@@ -257,13 +210,11 @@ class TimerService: ObservableObject {
         sessionStartDate = Date()
         isPaused = false
         
-        print("TimerService: resumeSession accumulatedElapsed=\(Int(accumulatedElapsed))s, flags isRunning=\(isRunning), isPaused=\(isPaused)")
+        print("[TimerService] resume")
         
         // Recreate the DispatchSourceTimer exactly as in startSession()
         tickTimer?.cancel()
         tickTimer = nil
-        timer?.invalidate()
-        timer = nil
         
         tickTimer = DispatchSource.makeTimerSource(queue: timerQueue)
         tickTimer?.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
@@ -300,11 +251,9 @@ class TimerService: ObservableObject {
     }
     
     func resetSession() {
-        print("TimerService: resetSession reason=user_reset")
+        print("[TimerService] reset")
         
-        // Cancel & nil both timers safely
-        timer?.invalidate()
-        timer = nil
+        // Cancel & nil tickTimer safely
         tickTimer?.cancel()
         tickTimer = nil
         
@@ -359,11 +308,9 @@ class TimerService: ObservableObject {
     private func completeSession() {
         guard let session = currentSession else { return }
         
-        print("TimerService: completeSession reason=timer_completed")
+        print("[TimerService] complete")
         
-        // Cancel & nil both timers safely
-        timer?.invalidate()
-        timer = nil
+        // Cancel & nil tickTimer safely
         tickTimer?.cancel()
         tickTimer = nil
         
@@ -428,7 +375,7 @@ class TimerService: ObservableObject {
         }
         
         if shouldAutoStart {
-            print("TimerService: Auto-starting \(nextPhase) phase")
+            print("[TimerService] auto-start \(nextPhase)")
             // Delay slightly to allow UI to update
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.startSession(type: nextPhase)
@@ -467,7 +414,7 @@ class TimerService: ObservableObject {
         
         sessionRef.setData(session.firestoreData) { error in
             if let error = error {
-                print("Error saving session: \(error)")
+                print("[Firebase] save session error: \(error)")
             }
         }
     }
@@ -499,7 +446,7 @@ class TimerService: ObservableObject {
         
         sessionRef.setData(session.firestoreData) { error in
             if let error = error {
-                print("Error saving completed session: \(error)")
+                print("[Firebase] save completed session error: \(error)")
             }
         }
     }
@@ -512,7 +459,7 @@ class TimerService: ObservableObject {
         
         sessionRef.delete { error in
             if let error = error {
-                print("Error deleting session: \(error)")
+                print("[Firebase] delete session error: \(error)")
             }
         }
     }
@@ -527,7 +474,7 @@ class TimerService: ObservableObject {
         
         sessionsRef.getDocuments { [weak self] snapshot, error in
             if let error = error {
-                print("Error loading last session: \(error)")
+                print("[Firebase] load session error: \(error)")
                 return
             }
             
@@ -559,9 +506,11 @@ class TimerService: ObservableObject {
             isRunning = true
             isPaused = false
             
-            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-                self?.updateTimer()
-            }
+            // Use the modern DispatchSourceTimer approach
+            tickTimer = DispatchSource.makeTimerSource(queue: timerQueue)
+            tickTimer?.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
+            tickTimer?.setEventHandler { [weak self] in self?.onTick() }
+            tickTimer?.resume()
         } else {
             // Session has expired, complete it
             completeSession()
@@ -569,6 +518,6 @@ class TimerService: ObservableObject {
     }
     
     deinit {
-        timer?.invalidate()
+        tickTimer?.cancel()
     }
 }

@@ -42,33 +42,33 @@ struct ContentView: View {
         .environmentObject(taskService)
         .onAppear {
             // Connect AuthService with AppState
-            print("ContentView: Connecting AuthService with AppState")
+            print("[ContentView] connecting AuthService with AppState")
             authService.setAppState(appState)
             
             // Connect TimerService with AppState
-            print("ContentView: Connecting TimerService with AppState")
+            print("[ContentView] connecting TimerService with AppState")
             timerService.setAppState(appState)
             
             // Connect current user to settings
             if let userId = appState.currentUser?.uid {
-                print("ContentView: Setting userId for SettingsViewModel: \(userId)")
+                print("[ContentView] setting userId for SettingsViewModel:\(userId)")
                 appState.setUserId(userId)
             }
         }
         .onChange(of: appState.currentUser?.uid) { newUserId in
             if let userId = newUserId {
-                print("ContentView: User ID changed, updating SettingsViewModel: \(userId)")
+                print("[ContentView] userId changed updating SettingsViewModel:\(userId)")
                 appState.setUserId(userId)
             }
         }
         .task {
             // Sign in anonymously on app launch
-            print("ContentView: Starting anonymous sign in")
+            print("[ContentView] starting anonymous sign in")
             do {
                 try await authService.signInAnonymously()
-                print("ContentView: Anonymous sign in completed successfully")
+                print("[ContentView] anonymous sign in completed successfully")
             } catch {
-                print("Failed to sign in anonymously: \(error)")
+                print("[ContentView] failed to sign in anonymously: \(error)")
             }
         }
     }

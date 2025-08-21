@@ -80,55 +80,55 @@ class SettingsViewModel: ObservableObject {
     func updateFocusDuration(_ duration: Int) {
         pomodoroDurations.focusDuration = duration
         saveSettings()
-        print("SettingsViewModel: Updated focus duration to \(duration) minutes")
+        print("[Settings] focus duration:\(duration)min")
     }
     
     func updateShortBreakDuration(_ duration: Int) {
         pomodoroDurations.shortBreakDuration = duration
         saveSettings()
-        print("SettingsViewModel: Updated short break duration to \(duration) minutes")
+        print("[Settings] short break duration:\(duration)min")
     }
     
     func updateLongBreakDuration(_ duration: Int) {
         pomodoroDurations.longBreakDuration = duration
         saveSettings()
-        print("SettingsViewModel: Updated long break duration to \(duration) minutes")
+        print("[Settings] long break duration:\(duration)min")
     }
     
     func toggleAutoStartBreak() {
         behaviour.autoStartBreak.toggle()
         saveSettings()
-        print("SettingsViewModel: Updated auto-start break to \(behaviour.autoStartBreak)")
+        print("[Settings] auto-start break:\(behaviour.autoStartBreak)")
     }
     
     func toggleAutoStartNextPomodoro() {
         behaviour.autoStartNextPomodoro.toggle()
         saveSettings()
-        print("SettingsViewModel: Updated auto-start next Pomodoro to \(behaviour.autoStartNextPomodoro)")
+        print("[Settings] auto-start next pomodoro:\(behaviour.autoStartNextPomodoro)")
     }
     
     func updateDailyGoal(_ goal: Int) {
         behaviour.dailyGoal = goal
         saveSettings()
-        print("SettingsViewModel: Updated daily goal to \(goal) Pomodoros")
+        print("[Settings] daily goal:\(goal) pomodoros")
     }
     
     func updateTheme(_ theme: Theme) {
         appearance.theme = theme
         saveSettings()
-        print("SettingsViewModel: Updated theme to \(theme.displayName)")
+        print("[Settings] theme:\(theme.displayName)")
     }
     
     func toggleHapticFeedback() {
         appearance.hapticFeedback.toggle()
         saveSettings()
-        print("SettingsViewModel: Updated haptic feedback to \(appearance.hapticFeedback)")
+        print("[Settings] haptic feedback:\(appearance.hapticFeedback)")
     }
     
     func toggleSoundEffects() {
         appearance.soundEffects.toggle()
         saveSettings()
-        print("SettingsViewModel: Updated sound effects to \(appearance.soundEffects)")
+        print("[Settings] sound effects:\(appearance.soundEffects)")
     }
     
     // MARK: - Private Methods
@@ -169,7 +169,7 @@ class SettingsViewModel: ObservableObject {
     private func loadSettingsFromSnapshot(_ snapshot: DocumentSnapshot) {
         guard let data = snapshot.data() else { return }
         
-        print("SettingsViewModel: Loading settings from snapshot: \(data)")
+        print("[Settings] loading settings from snapshot")
         
         // Load Pomodoro durations
         if let durationsData = data["pomodoroDurations"] as? [String: Any] {
@@ -181,7 +181,7 @@ class SettingsViewModel: ObservableObject {
             pomodoroDurations.shortBreakDuration = durationsData["shortBreakDuration"] as? Int ?? 5
             pomodoroDurations.longBreakDuration = durationsData["longBreakDuration"] as? Int ?? 15
             
-            print("SettingsViewModel: Pomodoro durations updated - Focus: \(oldFocus) → \(pomodoroDurations.focusDuration), Short: \(oldShortBreak) → \(pomodoroDurations.shortBreakDuration), Long: \(oldLongBreak) → \(pomodoroDurations.longBreakDuration)")
+            print("[Settings] pomodoro durations updated focus:\(pomodoroDurations.focusDuration)min short:\(pomodoroDurations.shortBreakDuration)min long:\(pomodoroDurations.longBreakDuration)min")
         }
         
         // Load behaviour settings
@@ -189,7 +189,7 @@ class SettingsViewModel: ObservableObject {
             behaviour.autoStartBreak = behaviourData["autoStartBreak"] as? Bool ?? false
             behaviour.autoStartNextPomodoro = behaviourData["autoStartNextPomodoro"] as? Bool ?? false
             behaviour.dailyGoal = behaviourData["dailyGoal"] as? Int ?? 4
-            print("SettingsViewModel: Behaviour settings loaded - Auto-start break: \(behaviour.autoStartBreak), Auto-start next: \(behaviour.autoStartNextPomodoro), Daily goal: \(behaviour.dailyGoal)")
+            print("[Settings] behaviour settings loaded auto-start break:\(behaviour.autoStartBreak) auto-start next:\(behaviour.autoStartNextPomodoro) daily goal:\(behaviour.dailyGoal)")
         }
         
         // Load appearance settings
@@ -197,11 +197,11 @@ class SettingsViewModel: ObservableObject {
             if let themeString = appearanceData["theme"] as? String,
                let theme = Theme(rawValue: themeString) {
                 appearance.theme = theme
-                print("SettingsViewModel: Theme loaded: \(theme.rawValue)")
+                print("[Settings] theme loaded:\(theme.rawValue)")
             }
             appearance.hapticFeedback = appearanceData["hapticFeedback"] as? Bool ?? true
             appearance.soundEffects = appearanceData["soundEffects"] as? Bool ?? true
-            print("SettingsViewModel: Appearance settings loaded - Haptic: \(appearance.hapticFeedback), Sound: \(appearance.soundEffects)")
+            print("[Settings] appearance settings loaded haptic:\(appearance.hapticFeedback) sound:\(appearance.soundEffects)")
         }
     }
     
@@ -212,11 +212,11 @@ class SettingsViewModel: ObservableObject {
     
     private func saveSettings() {
         guard let userId = userId else { 
-            print("SettingsViewModel: No userId available, cannot save settings")
+            print("[Settings] no userId available cannot save settings")
             return 
         }
         
-        print("SettingsViewModel: Saving settings to Firestore for user \(userId)")
+        print("[Settings] saving settings to Firestore for user:\(userId)")
         
         let settingsRef = db.collection("users").document(userId).collection("settings").document("user_settings")
         
@@ -239,15 +239,15 @@ class SettingsViewModel: ObservableObject {
             "updatedAt": FieldValue.serverTimestamp()
         ]
         
-        print("SettingsViewModel: Settings data to save: \(settingsData)")
+        print("[Settings] settings data to save")
         
         settingsRef.setData(settingsData, merge: true) { [weak self] error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("SettingsViewModel: Failed to save settings: \(error.localizedDescription)")
+                    print("[Settings] failed to save settings: \(error.localizedDescription)")
                     self?.errorMessage = "Failed to save settings: \(error.localizedDescription)"
                 } else {
-                    print("SettingsViewModel: Settings saved successfully to Firestore")
+                    print("[Settings] settings saved successfully to Firestore")
                     self?.errorMessage = nil
                 }
             }

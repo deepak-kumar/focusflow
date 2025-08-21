@@ -70,7 +70,7 @@ class AppState: ObservableObject {
     }
     
     func setUserId(_ uid: String) {
-        print("AppState: Setting userId for settings: \(uid)")
+        print("[AppState] set userId:\(uid)")
         settingsViewModel.setUserId(uid)
         
         // Also set currentUser if not already set

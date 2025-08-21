@@ -23,7 +23,7 @@ class TaskService: ObservableObject {
     init() {}
     
     func setUserId(_ uid: String) {
-        print("TaskService: Setting userId to \(uid)")
+        print("[TaskService] set userId:\(uid)")
         self.userId = uid
         setupRealtimeListener()
     }
@@ -74,7 +74,7 @@ class TaskService: ObservableObject {
     
     func createTask(_ task: Task) async throws {
         guard let userId = userId else {
-            print("TaskService: User not authenticated - userId is nil")
+            print("[TaskService] user not authenticated")
             throw TaskError.userNotAuthenticated
         }
         

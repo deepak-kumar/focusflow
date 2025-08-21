@@ -19,9 +19,9 @@ class AuthService: ObservableObject {
     }
     
     private func setupAuthStateListener() {
-        print("AuthService: Setting up auth state listener")
+        print("[AuthService] setting up auth state listener")
         auth.addStateDidChangeListener { [weak self] _, user in
-            print("AuthService: Auth state changed, user: \(user?.uid ?? "nil")")
+            print("[AuthService] auth state changed user:\(user?.uid ?? "nil")")
             DispatchQueue.main.async {
                 if let user = user {
                     let appUser = User(
@@ -29,18 +29,18 @@ class AuthService: ObservableObject {
                         isAnonymous: user.isAnonymous,
                         createdAt: user.metadata.creationDate ?? Date()
                     )
-                    print("AuthService: Setting currentUser to \(appUser.uid)")
+                    print("[AuthService] set currentUser:\(appUser.uid)")
                     self?.currentUser = appUser
                     self?.isAuthenticated = true
                     // Also update AppState
-                    print("AuthService: Updating AppState currentUser to \(appUser.uid)")
+                    print("[AuthService] updating AppState currentUser:\(appUser.uid)")
                     self?.appState?.currentUser = appUser
                 } else {
-                    print("AuthService: Clearing currentUser")
+                    print("[AuthService] clearing currentUser")
                     self?.currentUser = nil
                     self?.isAuthenticated = false
                     // Also update AppState
-                    print("AuthService: Clearing AppState currentUser")
+                    print("[AuthService] clearing AppState currentUser")
                     self?.appState?.currentUser = nil
                 }
             }
@@ -48,11 +48,11 @@ class AuthService: ObservableObject {
     }
     
     func signInAnonymously() async throws {
-        print("AuthService: Starting anonymous sign in")
+        print("[AuthService] starting anonymous sign in")
         do {
             let result = try await auth.signInAnonymously()
             let user = result.user
-            print("AuthService: Anonymous sign in successful, user: \(user.uid)")
+            print("[AuthService] anonymous sign in successful user:\(user.uid)")
             
             // Create user document in Firestore
             try await createUserDocument(uid: user.uid)
@@ -63,15 +63,15 @@ class AuthService: ObservableObject {
                     isAnonymous: user.isAnonymous,
                     createdAt: user.metadata.creationDate ?? Date()
                 )
-                print("AuthService: Setting currentUser to \(appUser.uid)")
+                print("[AuthService] set currentUser:\(appUser.uid)")
                 self.currentUser = appUser
                 self.isAuthenticated = true
                 // Also update AppState
-                print("AuthService: Updating AppState currentUser to \(appUser.uid)")
+                print("[AuthService] updating AppState currentUser:\(appUser.uid)")
                 self.appState?.currentUser = appUser
             }
         } catch {
-            print("Error signing in anonymously: \(error)")
+            print("[AuthService] error signing in anonymously: \(error)")
             throw error
         }
     }

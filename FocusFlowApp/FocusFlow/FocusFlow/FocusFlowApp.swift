@@ -10,11 +10,11 @@ import Firebase
 
 @main
 struct FocusFlowApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     
     init() {
-        // Configure Firebase
-        FirebaseApp.configure()
+        // Firebase configuration moved to AppDelegate
     }
     
     var body: some Scene {
@@ -23,7 +23,7 @@ struct FocusFlowApp: App {
                 .environmentObject(appState)
                 .preferredColorScheme(appState.theme.colorScheme)
                 .onAppear {
-                    print("FocusFlowApp: App launched with theme: \(appState.theme.rawValue)")
+                    print("[App] launched theme:\(appState.theme.rawValue)")
                 }
         }
     }
