@@ -3,15 +3,7 @@ import SwiftUI
 /// Premium control bar with 6 clear buttons: Focus, Short Break, Long Break, Pause/Resume, Reset, Skip
 /// Each button has premium styling, never wraps text, and scales well with Dynamic Type
 struct PremiumTimerControlBar: View {
-    var isRunning: Bool
-    var isPaused: Bool
-    var onFocus: () -> Void
-    var onShortBreak: () -> Void
-    var onLongBreak: () -> Void
-    var onPause: () -> Void
-    var onResume: () -> Void
-    var onReset: () -> Void
-    var onSkip: () -> Void
+    @EnvironmentObject var timerService: TimerService
 
     var body: some View {
         VStack(spacing: 16) {
@@ -21,56 +13,56 @@ struct PremiumTimerControlBar: View {
                     title: "Focus",
                     icon: "brain.head.profile",
                     color: PhaseTheme.color(for: "Focus"),
-                    action: onFocus
+                    action: { timerService.startSession(type: .focus) }
                 )
                 
                 premiumButton(
                     title: "Short Break",
                     icon: "cup.and.saucer",
                     color: PhaseTheme.color(for: "Short Break"),
-                    action: onShortBreak
+                    action: { timerService.startSession(type: .shortBreak) }
                 )
                 
                 premiumButton(
                     title: "Long Break",
                     icon: "figure.walk",
                     color: PhaseTheme.color(for: "Long Break"),
-                    action: onLongBreak
+                    action: { timerService.startSession(type: .longBreak) }
                 )
             }
             
             // Bottom row: Pause/Resume, Reset, Skip
             HStack(spacing: 12) {
-                // Pause/Resume button - shown only when timer is running
-                if isRunning {
-                    if isPaused {
-                        premiumButton(
-                            title: "Resume",
-                            icon: "play.fill",
-                            color: .accentColor,
-                            action: onResume,
-                            style: .accent
-                        )
-                    } else {
-                        premiumButton(
-                            title: "Pause",
-                            icon: "pause.fill",
-                            color: .orange,
-                            action: onPause,
-                            style: .accent
-                        )
-                    }
-                } else {
-                    // Spacer when timer not running
-                    Spacer()
-                        .frame(maxWidth: .infinity)
-                }
+                // Pause/Resume button - ALWAYS VISIBLE, toggles based on timer state
+                let isRunning = timerService.isRunning
+                let isPaused = timerService.isPaused
+                let canPause = isRunning && !isPaused        // running → can pause
+                let canResume = isRunning && isPaused        // paused  → can resume
+                let isEnabled = canPause || canResume        // enabled only if one action is possible
+                let label = canResume ? "Resume" : "Pause"   // dynamic label
+                let icon = canResume ? "play.fill" : "pause.fill"
+                
+                premiumButton(
+                    title: label,
+                    icon: icon,
+                    color: .orange,
+                    action: {
+                        if canPause {
+                            timerService.pauseSession()
+                        } else if canResume {
+                            timerService.resumeSession()
+                        }
+                    },
+                    style: .accent
+                )
+                .disabled(!isEnabled)
+                .opacity(isEnabled ? 1.0 : 0.55)
                 
                 premiumButton(
                     title: "Reset",
                     icon: "arrow.counterclockwise",
                     color: .secondary,
-                    action: onReset,
+                    action: { timerService.resetSession() },
                     style: .neutral
                 )
                 
@@ -78,7 +70,7 @@ struct PremiumTimerControlBar: View {
                     title: "Skip",
                     icon: "forward.end.fill",
                     color: .secondary,
-                    action: onSkip,
+                    action: { timerService.skipToNextPhase() },
                     style: .neutral
                 )
             }
@@ -108,14 +100,9 @@ struct PremiumTimerControlBar: View {
                 
                 Text(title)
                     .font(.caption.weight(.semibold))
-                    .lineLimit(1)                    // Never wrap
-                    .minimumScaleFactor(0.8)         // Scale down for Dynamic Type
-                    .allowsTightening(true)          // Compress if needed
-                    .truncationMode(.tail)           // Graceful truncation
                     .foregroundStyle(style == .accent ? .white : color)
             }
             .frame(maxWidth: .infinity, minHeight: 64)
-            .frame(minWidth: 108)                    // Prevent cramping
             .padding(.vertical, 12)
             .padding(.horizontal, 8)
             .background(
@@ -186,17 +173,8 @@ struct PremiumButtonStyle: ButtonStyle {
             .foregroundStyle(.primary)
         
         GlassCard {
-            PremiumTimerControlBar(
-                isRunning: true,
-                isPaused: false,
-                onFocus: { print("Focus started") },
-                onShortBreak: { print("Short Break started") },
-                onLongBreak: { print("Long Break started") },
-                onPause: { print("Timer paused") },
-                onResume: { print("Timer resumed") },
-                onReset: { print("Timer reset") },
-                onSkip: { print("Phase skipped") }
-            )
+            PremiumTimerControlBar()
+                .environmentObject(TimerService())
         }
         
         Spacer()

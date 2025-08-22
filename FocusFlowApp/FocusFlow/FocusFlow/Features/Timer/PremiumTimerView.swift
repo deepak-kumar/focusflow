@@ -57,18 +57,9 @@ struct PremiumTimerView: View {
                 }
 
                 GlassCard {
-                    PremiumTimerControlBar(
-                        isRunning: timerService.isRunning,
-                        isPaused: timerService.isPaused,
-                        onFocus: { timerService.startSession(type: .focus) },
-                        onShortBreak: { timerService.startSession(type: .shortBreak) },
-                        onLongBreak: { timerService.startSession(type: .longBreak) },
-                        onPause: { timerService.pauseSession() },
-                        onResume: { timerService.resumeSession() },
-                        onReset: { timerService.resetSession() },
-                        onSkip: { timerService.skipToNextPhase() }
-                    )
-                    .accessibilityIdentifier("premium-control-bar")
+                    PremiumTimerControlBar()
+                        .environmentObject(timerService)
+                        .accessibilityIdentifier("premium-control-bar")
                 }
 
                 // Session Info (enhanced with glass card)
