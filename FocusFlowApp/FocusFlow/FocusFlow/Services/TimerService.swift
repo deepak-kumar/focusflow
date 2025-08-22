@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFirestore
 import Combine
+import UserNotifications
 
 class TimerService: ObservableObject {
     @Published var currentSession: TimerSession?
@@ -326,6 +327,9 @@ class TimerService: ObservableObject {
         if appState?.hapticFeedback == true {
             hapticService.timerComplete()
         }
+        
+        // Schedule local notification for session completion
+        NotificationManager.shared.scheduleSessionCompletionNotification(for: session.type)
         
         // Mark session as completed
         var completedSession = session
