@@ -24,6 +24,15 @@ struct FocusFlowApp: App {
                 .preferredColorScheme(appState.theme.colorScheme)
                 .onAppear {
                     print("[App] launched theme:\(appState.theme.rawValue)")
+                    
+                    // Request notification permissions on app launch
+                    NotificationManager.shared.requestNotificationPermission { granted in
+                        if granted {
+                            print("[App] Notification permissions granted")
+                        } else {
+                            print("[App] Notification permissions denied")
+                        }
+                    }
                 }
         }
     }

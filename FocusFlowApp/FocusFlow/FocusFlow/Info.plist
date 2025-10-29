@@ -5,5 +5,8 @@
 
 	<key>UILaunchScreen</key>
 	<dict/>
+	
+	<key>NSUserNotificationUsageDescription</key>
+	<string>FocusFlow sends notifications when your focus sessions, short breaks, and long breaks complete to help you stay on track with your productivity goals.</string>
 </dict>
 </plist>
